@@ -1,0 +1,283 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://www.apple.com/newsroom/rss-feed.rss, https://news.google.com/rss/search?q=Samsung+smartphone+sales,https://news.google.com/rss/search?q=Huawei+smartphone+sales",
+        "options": {}
+      },
+      "id": "4097d3aa-4d58-4e52-8058-cf0273aa4a0e",
+      "name": "Fetch News & Blog RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [
+        0,
+        208
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {},
+      "id": "152dd0e4-2b7a-4528-83d1-101fef183061",
+      "name": "Combine Data Sources",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        224,
+        112
+      ],
+      "typeVersion": 3.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const combinedContent = $input.all()\n  .map(item => {\n    const data = item.json;\n\n    const textContent = (\n      data.description ||\n      data.snippet ||\n      data.title ||\n      data.searchQuery?.term ||\n      'No content available'\n    ).slice(0, 1000); // shorter = faster + safer\n\n    return `Title: ${data.title || 'No title'}\nSource: ${data.source || 'Unknown'}\nURL: ${data.url || ''}\n\nContent:\n${textContent}`;\n  })\n  .join('\\n\\n----------------------\\n\\n');\n\nreturn [\n  {\n    json: {\n      content: combinedContent\n    }\n  }\n];"
+      },
+      "id": "bb7cb4dd-1b41-4076-9a86-4f1f002b66a8",
+      "name": "Pre-process Data for AI",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        432,
+        112
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "resource": "document",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "text": "=Analyze the content below and generate a structured, concise report.\n\nCONTENT:\n{{$json.content}}\n\nTASK:\n1. Summarize the key points in 3–5 bullet points.\n2. Identify any mentioned smartphone brands (e.g., Apple, Samsung, Xiaomi, Huawei, Oppo).\n3. Extract insights related to:\n   - Market share\n   - Sales performance\n   - Product launches\n   - Competitive positioning\n4. Identify any trends (growth, decline, innovation, pricing, regional shifts).\n\nOUTPUT FORMAT (STRICT):\n\nSummary:\n• ...\n• ...\n\nCompanies Mentioned:\n• Company – Insight\n\nMarket Insights:\n• ...\n\nTrends:\n• ...\n\nRULES:\n- Be concise and factual\n- Do NOT repeat the input text\n- If no data is available for a section, write \"Not mentioned\"",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        256
+      ],
+      "id": "4c3e63fa-183e-4658-836c-fdb237dc7140",
+      "name": "Analyze document",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "xjcEID48aibUzXUt",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "https://docs.google.com/document/d/1saUKR7o61F4q6NKIOgw8wtgfN2mruIko_1DOq5Ue-MM/edit?tab=t.0",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $json.content.parts[0].text }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        880,
+        256
+      ],
+      "id": "4696b1eb-29f9-49ae-9166-5d1bb21bf3d9",
+      "name": "Update a document",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "amwYA2wgPqKuNWQZ",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/apify~google-search-scraper/run-sync-get-dataset-items?token=apify_api_mTKGK5Cpa2QLgIwM7nvaOP5iBYSGJ61yzRGV",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"queries\": \"smartphone market share 2026\\nApple vs Samsung sales\\nXiaomi market share 2026\",\n  \"maxPagesPerQuery\": 1\n}",
+        "options": {}
+      },
+      "id": "84a4392b-6b89-426a-98f1-dbffa5fa8c17",
+      "name": "Http Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 4.2,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "AbbN0I5Z9b3ilpqG",
+          "name": "Bearer Auth account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "market-logs",
+        "responseMode": "responseNode",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, POST, OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -320,
+        128
+      ],
+      "id": "2c59e599-5f78-401e-b026-808b47b5dd66",
+      "name": "Webhook",
+      "webhookId": "546e5926-33ee-4580-a6e2-767057771a9a"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $('Analyze document').item.json.content.parts[0].text }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1088,
+        256
+      ],
+      "id": "4999a878-c4eb-4306-81c5-dd39af905ec8",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Fetch News & Blog RSS": {
+      "main": [
+        [
+          {
+            "node": "Combine Data Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Combine Data Sources": {
+      "main": [
+        [
+          {
+            "node": "Pre-process Data for AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-process Data for AI": {
+      "main": [
+        [
+          {
+            "node": "Analyze document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze document": {
+      "main": [
+        [
+          {
+            "node": "Update a document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a document": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Http Request": {
+      "main": [
+        [
+          {
+            "node": "Combine Data Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Http Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch News & Blog RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "6c77eb3e-be2e-4b9f-8b27-944036c2f576",
+  "meta": {
+    "instanceId": "ab1ad891df0080090d047f7369012c83811e4303676443df3764965df2782e02"
+  },
+  "id": "ZNgD1XmNvLspVIYS",
+  "tags": []
+}
